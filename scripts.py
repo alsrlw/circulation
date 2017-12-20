@@ -303,9 +303,9 @@ class LaneSweeperScript(LibraryInputScript):
         _db = _db or self._db
         super(LaneSweeperScript, self).__init__(_db)
         from api.app import app
-        app.manager = CirculationManager(_db, testing=testing)
+        app.manager = CirculationManager(self._db, testing=testing)
         self.app = app
-        self.base_url = ConfigurationSetting.sitewide(_db, Configuration.BASE_URL_KEY).value
+        self.base_url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
 
     def process_library(self, library):
         begin = time.time()
@@ -317,10 +317,12 @@ class LaneSweeperScript(LibraryInputScript):
             new_queue = []
             self.log.debug("Beginning of loop: %d lanes to process", len(queue))
             for l in queue:
+                if isinstance(l, Lane):
+                    l = self._db.merge(l)
                 if self.should_process_lane(l):
                     self.process_lane(l)
                     self._db.commit()
-                for sublane in l.sublanes:
+                for sublane in l.children:
                     new_queue.append(sublane)
             queue = new_queue
         ctx.pop()
@@ -504,7 +506,7 @@ class CacheFacetListsPerLane(CacheRepresentationPerLane):
             languages = None
             lane_name = None
 
-        library = lane.library
+        library = lane.get_library(self._db)
         url = self.app.manager.cdn_url_for(
             "feed", languages=languages, lane_name=lane_name, library_short_name=library.short_name
         )
@@ -563,7 +565,7 @@ class CacheOPDSGroupFeedPerLane(CacheRepresentationPerLane):
 
     def should_process_lane(self, lane):
         # OPDS group feeds are only generated for lanes that have sublanes.
-        if not lane.sublanes:
+        if not lane.children:
             return False
         if self.max_depth and lane.depth > self.max_depth:
             return False
@@ -579,7 +581,7 @@ class CacheOPDSGroupFeedPerLane(CacheRepresentationPerLane):
         else:
             languages = None
             lane_name = None
-        library = lane.library
+        library = lane.get_library(self._db)
         url = self.app.manager.cdn_url_for(
             "acquisition_groups", languages=languages, lane_name=lane_name, library_short_name=library.short_name
         )

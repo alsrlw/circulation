@@ -28,7 +28,6 @@ from core import log
 from core.lane import Lane
 from core.classifier import Classifier
 from core.model import (
-    Base,
     CirculationEvent,
     ConfigurationSetting,
     Contribution,
@@ -57,7 +56,6 @@ from core.scripts import (
     RunCoverageProvidersScript,
     RunCoverageProviderScript,
     IdentifierInputScript,
-    LaneSweeperScript,
     LibraryInputScript,
     PatronInputScript,
     RunMonitorScript,
@@ -298,6 +296,44 @@ class UpdateStaffPicksScript(Script):
         return StringIO(representation.content)
 
 
+class LaneSweeperScript(LibraryInputScript):
+    """Do something to each lane in a library."""
+
+    def __init__(self, _db=None, testing=False):
+        _db = _db or self._db
+        super(LaneSweeperScript, self).__init__(_db)
+        from api.app import app
+        app.manager = CirculationManager(_db, testing=testing)
+        self.app = app
+        self.base_url = ConfigurationSetting.sitewide(_db, Configuration.BASE_URL_KEY).value
+
+    def process_library(self, library):
+        begin = time.time()
+        client = self.app.test_client()
+        ctx = self.app.test_request_context(base_url=self.base_url)
+        ctx.push()
+        queue = [self.app.manager.top_level_lanes[library.id]]
+        while queue:
+            new_queue = []
+            self.log.debug("Beginning of loop: %d lanes to process", len(queue))
+            for l in queue:
+                if self.should_process_lane(l):
+                    self.process_lane(l)
+                    self._db.commit()
+                for sublane in l.sublanes:
+                    new_queue.append(sublane)
+            queue = new_queue
+        ctx.pop()
+        end = time.time()
+        self.log.info("Entire process took %.2fsec", (end-begin))
+
+    def should_process_lane(self, lane):
+        return True
+
+    def process_lane(self, lane):
+        pass
+
+
 class CacheRepresentationPerLane(LaneSweeperScript):
 
     name = "Cache one representation per lane"
@@ -324,13 +360,9 @@ class CacheRepresentationPerLane(LaneSweeperScript):
         )
         return parser
 
-    def __init__(self, _db=None, cmd_args=None, testing=False, *args, **kwargs):
+    def __init__(self, _db=None, cmd_args=None, *args, **kwargs):
         super(CacheRepresentationPerLane, self).__init__(_db, *args, **kwargs)
         self.parse_args(cmd_args)
-        from api.app import app
-        app.manager = CirculationManager(self._db, testing=testing)
-        self.app = app
-        self.base_url = ConfigurationSetting.sitewide(self._db, Configuration.BASE_URL_KEY).value
         
     def parse_args(self, cmd_args=None):
         parser = self.arg_parser(self._db)
@@ -389,22 +421,12 @@ class CacheRepresentationPerLane(LaneSweeperScript):
 
     cache_url_method = None
 
-    def process_library(self, library):
-        begin = time.time()
-        client = self.app.test_client()
-        ctx = self.app.test_request_context(base_url=self.base_url)
-        ctx.push()
-        super(CacheRepresentationPerLane, self).process_library(library)
-        ctx.pop()
-        end = time.time()
-        self.log.info(
-            "Processed library %s in %.2fsec", library.short_name, end-begin
-        )
-
     def process_lane(self, lane):
         annotator = self.app.manager.annotator(lane)
         a = time.time()
-        self.log.info("Generating feed(s) for %s", lane.full_identifier)
+        self.log.info(
+            "Generating feed(s) for %s", lane.full_identifier
+        )
         cached_feeds = list(self.do_generate(lane))
         b = time.time()
         total_size = sum(len(x.content) for x in cached_feeds if x)
@@ -482,7 +504,7 @@ class CacheFacetListsPerLane(CacheRepresentationPerLane):
             languages = None
             lane_name = None
 
-        library = lane.get_library(self._db)
+        library = lane.library
         url = self.app.manager.cdn_url_for(
             "feed", languages=languages, lane_name=lane_name, library_short_name=library.short_name
         )
@@ -541,7 +563,7 @@ class CacheOPDSGroupFeedPerLane(CacheRepresentationPerLane):
 
     def should_process_lane(self, lane):
         # OPDS group feeds are only generated for lanes that have sublanes.
-        if not lane.children:
+        if not lane.sublanes:
             return False
         if self.max_depth and lane.depth > self.max_depth:
             return False
@@ -557,7 +579,7 @@ class CacheOPDSGroupFeedPerLane(CacheRepresentationPerLane):
         else:
             languages = None
             lane_name = None
-        library = lane.get_library(self._db)
+        library = lane.library
         url = self.app.manager.cdn_url_for(
             "acquisition_groups", languages=languages, lane_name=lane_name, library_short_name=library.short_name
         )

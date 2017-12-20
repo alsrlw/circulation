@@ -317,7 +317,7 @@ class LaneSweeperScript(LibraryInputScript):
             new_queue = []
             self.log.debug("Beginning of loop: %d lanes to process", len(queue))
             for l in queue:
-                if isinstance(l, Lane):
+                if isinstance(l, Base):
                     l = self._db.merge(l)
                 if self.should_process_lane(l):
                     self.process_lane(l)

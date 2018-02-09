@@ -275,6 +275,13 @@ INVALID_EXTERNAL_TYPE_REGULAR_EXPRESSION = pd(
     detail=_("The specified external type regular expression does not compile."),
 )
 
+INVALID_LIBRARY_IDENTIFIER_RESTRICTION_REGULAR_EXPRESSION = pd(
+    "http://librarysimplified.org/terms/problem/invalid-library-identifier-restriction-regular-expression",
+    status_code=400,
+    title=_("Invalid library identifier restriction regular expression"),
+    detail=_("The specified library identifier restriction regular expression does not compile."),
+)
+
 MULTIPLE_BASIC_AUTH_SERVICES = pd(
     "http://librarysimplified.org/terms/problem/multiple-basic-auth-services",
     status_code=400,
@@ -322,6 +329,13 @@ CUSTOM_LIST_NAME_ALREADY_IN_USE = pd(
     status_code=400,
     title=_("Custom list name already in use"),
     detail=_("The library already has a custom list with that name."),
+)
+
+COLLECTION_NOT_ASSOCIATED_WITH_LIBRARY = pd(
+    "http://librarysimplified.org/terms/problem/collection-not-associated-with-library",
+    status_code=400,
+    title=_("Collection not associated with library"),
+    detail=_("You can't add a collection to a list unless it is associated with the list's library."),
 )
 
 MISSING_LANE = pd(

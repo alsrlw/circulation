@@ -10,6 +10,7 @@ from flask_babel import lazy_gettext as _
 from sqlalchemy.orm.session import Session
 
 from config import CannotLoadConfiguration
+from core.app_server import cdn_url_for
 from core.model import (
     get_one,
 )
